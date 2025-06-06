@@ -1,95 +1,126 @@
-class MainScene extends Phaser.Scene {
-    constructor() {
-        super('main');
-    }
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-    preload() {
-        // create textures for bird and box using graphics
-        const g = this.add.graphics();
-        g.fillStyle(0xff0000, 1);
-        g.fillCircle(20, 20, 20);
-        g.generateTexture('bird', 40, 40);
-        g.clear();
-        g.fillStyle(0x8B4513, 1);
-        g.fillRect(0, 0, 40, 40);
-        g.generateTexture('box', 40, 40);
-        g.destroy();
-    }
+const groundY = 580;
+const slingshot = { x: 150, y: 520 };
+const bird = { x: slingshot.x, y: slingshot.y, r: 20, vx: 0, vy: 0, static: true };
+let isDragging = false;
+let boxes = [
+  { x: 600, y: 550, w: 40, h: 40 },
+  { x: 640, y: 550, w: 40, h: 40 },
+  { x: 620, y: 510, w: 40, h: 40 }
+];
 
-    create() {
-        // enable matter physics
-        this.matter.world.setBounds(0, 0, 800, 600);
-
-        // ground
-        this.matter.add.rectangle(400, 590, 800, 20, { isStatic: true });
-
-        // boxes to knock over
-        this.boxes = [];
-        this.boxes.push(this.matter.add.image(600, 550, 'box'));
-        this.boxes.push(this.matter.add.image(640, 550, 'box'));
-        this.boxes.push(this.matter.add.image(620, 510, 'box'));
-        this.boxes.forEach(box => {
-            box.setBody({ type: 'rectangle', width: 40, height: 40 });
-            box.setFriction(0.1);
-            box.setBounce(0.1);
-        });
-
-        // bird
-        this.bird = this.matter.add.image(150, 520, 'bird');
-        this.bird.setCircle(20);
-        this.bird.setBounce(0.8);
-        this.bird.setOrigin(0.5);
-        this.bird.setStatic(true);
-
-        this.slingshot = new Phaser.Math.Vector2(150, 520);
-        this.isDragging = false;
-
-        this.input.on('pointerdown', this.startDrag, this);
-        this.input.on('pointermove', this.doDrag, this);
-        this.input.on('pointerup', this.endDrag, this);
-    }
-
-    startDrag(pointer) {
-        const dist = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.bird.x, this.bird.y);
-        if (dist <= 40 && this.bird.body.isStatic) {
-            this.isDragging = true;
-        }
-    }
-
-    doDrag(pointer) {
-        if (!this.isDragging) return;
-        const maxDist = 100;
-        const angle = Phaser.Math.Angle.Between(this.slingshot.x, this.slingshot.y, pointer.x, pointer.y);
-        let dist = Phaser.Math.Distance.Between(this.slingshot.x, this.slingshot.y, pointer.x, pointer.y);
-        dist = Math.min(dist, maxDist);
-        const x = this.slingshot.x + Math.cos(angle) * dist;
-        const y = this.slingshot.y + Math.sin(angle) * dist;
-        this.bird.setPosition(x, y);
-    }
-
-    endDrag(pointer) {
-        if (!this.isDragging) return;
-        this.isDragging = false;
-        const dx = this.slingshot.x - this.bird.x;
-        const dy = this.slingshot.y - this.bird.y;
-        this.bird.setStatic(false);
-        this.bird.setVelocity(dx * 0.2, dy * 0.2);
-    }
+function distance(x1, y1, x2, y2) {
+  return Math.hypot(x2 - x1, y2 - y1);
 }
 
-const config = {
-    type: Phaser.AUTO,
-    width: 800,
-    height: 600,
-    backgroundColor: '#87CEEB',
-    physics: {
-        default: 'matter',
-        matter: {
-            gravity: { y: 1 },
-            debug: false
-        }
-    },
-    scene: MainScene
-};
+function startDrag(e) {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  if (distance(x, y, bird.x, bird.y) <= bird.r && bird.static) {
+    isDragging = true;
+  }
+}
 
-new Phaser.Game(config);
+function doDrag(e) {
+  if (!isDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const maxDist = 100;
+  const angle = Math.atan2(y - slingshot.y, x - slingshot.x);
+  let dist = distance(x, y, slingshot.x, slingshot.y);
+  dist = Math.min(dist, maxDist);
+  bird.x = slingshot.x + Math.cos(angle) * dist;
+  bird.y = slingshot.y + Math.sin(angle) * dist;
+}
+
+function endDrag() {
+  if (!isDragging) return;
+  isDragging = false;
+  const dx = slingshot.x - bird.x;
+  const dy = slingshot.y - bird.y;
+  bird.static = false;
+  bird.vx = dx * 0.2;
+  bird.vy = dy * 0.2;
+}
+
+function update() {
+  if (!bird.static) {
+    bird.vy += 0.5; // gravity
+    bird.x += bird.vx;
+    bird.y += bird.vy;
+
+    // ground collision
+    if (bird.y + bird.r > groundY) {
+      bird.y = groundY - bird.r;
+      bird.vy *= -0.6;
+      bird.vx *= 0.8;
+      if (Math.abs(bird.vy) < 0.1) {
+        bird.vy = 0;
+      }
+      if (Math.abs(bird.vx) < 0.1) {
+        bird.vx = 0;
+      }
+      if (bird.vx === 0 && bird.vy === 0) {
+        bird.static = true;
+        bird.x = slingshot.x;
+        bird.y = slingshot.y;
+      }
+    }
+
+    // box collision
+    boxes = boxes.filter(box => {
+      const hit =
+        bird.x + bird.r > box.x &&
+        bird.x - bird.r < box.x + box.w &&
+        bird.y + bird.r > box.y &&
+        bird.y - bird.r < box.y + box.h;
+      return !hit;
+    });
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#87CEEB';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // ground
+  ctx.fillStyle = '#654321';
+  ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+  // boxes
+  ctx.fillStyle = '#8B4513';
+  boxes.forEach(box => {
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+  });
+
+  // slingshot rubber
+  if (isDragging) {
+    ctx.strokeStyle = '#000';
+    ctx.beginPath();
+    ctx.moveTo(slingshot.x, slingshot.y);
+    ctx.lineTo(bird.x, bird.y);
+    ctx.stroke();
+  }
+
+  // bird
+  ctx.fillStyle = '#ff0000';
+  ctx.beginPath();
+  ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+canvas.addEventListener('mousedown', startDrag);
+canvas.addEventListener('mousemove', doDrag);
+window.addEventListener('mouseup', endDrag);
+
+loop();
