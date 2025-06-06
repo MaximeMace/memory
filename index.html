@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple Phaser Slingshot</title>
+  <title>Simple Slingshot</title>
   <style>
     body {
       margin: 0;
@@ -17,9 +17,10 @@
       padding: 0;
     }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+  <!-- Phaser can't be loaded in this environment. Using a small canvas based fallback -->
 </head>
 <body>
-  <script type="module" src="./js/game.js"></script>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+  <script src="./js/game.js"></script>
 </body>
 </html>
